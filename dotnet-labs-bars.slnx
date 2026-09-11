@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="dotnet-labs-bars/dotnet-labs-bars.csproj" />
+  <Project Path="RestApiHomework/RestApiHomework.csproj" Id="0b4bd1da-1ac7-4188-8899-0457fd61a8de" />
 </Solution>
