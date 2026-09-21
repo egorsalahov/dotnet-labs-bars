@@ -1,109 +1,88 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using RestApiHomework.Data;
 using RestApiHomework.DTO_s;
-using RestApiHomework.Models;
-using Microsoft.EntityFrameworkCore;
+using RestApiHomework.Services;
 
+namespace RestApiHomework.Controllers;
 
-namespace RestApiHomework.Controllers
+[ApiController]
+[Route("api/[controller]")]
+public class UsersController : ControllerBase
 {
-    [Route("api/[controller]")]
-    public class UsersController : ControllerBase
+    private readonly IUserService _userService;
+
+    public UsersController(IUserService userService)
     {
-        private readonly AppDbContext _context;
+        _userService = userService;
+    }
 
-        public UsersController(AppDbContext context)
+    //регистрация
+    [HttpPost("register")]
+    public async Task<ActionResult<UserResponseDto>> Register([FromBody] RegisterDto dto)
+    {
+        try
         {
-            _context = context;
+            var user = await _userService.RegisterAsync(dto);
+            return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, user);
         }
-
-        //регистрация
-        [HttpPost("register")]
-        public async Task<ActionResult<UserResponseDto>> Register(RegisterDto dto)
+        catch (InvalidOperationException ex)
         {
-            if (await _context.Users.AnyAsync(u => u.Username == dto.Username))
-                return BadRequest("User с таким именем уже есть");
-
-            if (await _context.Users.AnyAsync(u => u.Email == dto.Email))
-                return BadRequest("User с таким емайлом уже есть");
-
-            //хеш
-            string passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-
-            var user = new User
-            {
-                Username = dto.Username,
-                Email = dto.Email,
-                PasswordHash = passwordHash
-            };
-
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            var response = new UserResponseDto(user.Id, user.Username, user.Email);
-
-            return CreatedAtAction(nameof(GetUserById), new { id = user.Id }, response);
+            return BadRequest(ex.Message);
         }
+    }
 
-        //авторизация
-        [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginDto dto)
+    //авторизация
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginDto dto)
+    {
+        var user = await _userService.LoginAsync(dto);
+        if (user == null)
+            return Unauthorized("Неверное имя пользователя или пароль.");
+
+        return Ok(new { Message = "Успешная авторизация!", User = user });
+    }
+
+
+    //get
+    [HttpGet]
+    public async Task<ActionResult<UserResponseDto>> GetUserById(int id)
+    {
+        var user = await _userService.GetByIdAsync(id);
+        if (user == null) return NotFound("User не найден");
+
+        return Ok(user);
+    }
+
+    //get по определенному отрезку времени
+    [HttpGet("range")]
+    public async Task<ActionResult<IEnumerable<UserResponseDto>>> GetUsersByDateRange([FromQuery] UserFilterDto filter)
+    {
+        var users = await _userService.GetFilteredAsync(filter);
+        return Ok(users);
+    }
+
+    //update
+    [HttpPut]
+    public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto dto)
+    {
+        try
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == dto.Username);
-
-            if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            {
-                return Unauthorized("Такого User нет");
-            }
-
-            return Ok(new { Message = "Успешная авторизация!", UserId = user.Id, user.Username });
-        }
-
-        //get
-        [HttpGet]
-        public async Task<ActionResult<UserResponseDto>> GetUserById(int id)
-        {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null) return NotFound("User не найден");
-
-            return new UserResponseDto(user.Id, user.Username, user.Email);
-        }
-
-
-        //update
-        [HttpPut]
-        public async Task<IActionResult> UpdateUser(int id, UpdateUserDto dto)
-        {
-            var user = await _context.Users.FindAsync(id);
-
-            if (user == null) return NotFound("User не найден");
-
-            if (await _context.Users.AnyAsync(u => u.Username == dto.Username && u.Id != id))
-                return BadRequest("Имя занято");
-
-            if (await _context.Users.AnyAsync(u => u.Email == dto.Email && u.Id != id))
-                return BadRequest("Почта занята");
-
-            user.Username = dto.Username;
-            user.Email = dto.Email;
-
-            await _context.SaveChangesAsync();
+            var updated = await _userService.UpdateAsync(id, dto);
+            if (!updated) return NotFound("User не найден");
 
             return NoContent();
         }
-
-        //delete
-        [HttpDelete]
-        public async Task<IActionResult> DeleteUser(int id)
+        catch (InvalidOperationException ex)
         {
-            var user = await _context.Users.FindAsync(id);
-
-            if (user == null) return NotFound("Пользователь не найден.");
-
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            return BadRequest(ex.Message);
         }
+    }
+
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteUser(int id)
+    {
+        var deleted = await _userService.DeleteAsync(id);
+        if (!deleted) return NotFound("User не найден");
+
+        return NoContent();
     }
 }

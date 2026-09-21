@@ -23,8 +23,12 @@ artifacts/
 *.tar
 *.tgz
 
-# Rider
+## JetBrains (Rider, ReSharper) 
 .idea/
+*.sln.iml
+_ReSharper*/
+*.ReSharper
+*.ReSharper.user
 
 # VS Code
 .vscode/
